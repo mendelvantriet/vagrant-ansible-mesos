@@ -1,0 +1,81 @@
+---
+- hosts: masters
+  become: yes # needed for vagrant
+  tasks:
+  - name: build hosts file
+    # ansible_default_ipv4 is set to vagrant's NAT interface, so we use ansible_eth1.ipv4
+    lineinfile: dest=/etc/hosts regexp='.*{{ item }}$' line="{{ hostvars[item].ansible_eth1.ipv4.address }} {{item}}" state=present
+    when: hostvars[item].ansible_default_ipv4.address is defined
+    with_items: "{{ groups['all'] }}"
+  - name: install mesosphere
+    yum:
+      name: http://repos.mesosphere.com/el/7/noarch/RPMS/mesosphere-el-repo-7-1.noarch.rpm
+      state: present
+  - name: install packages
+    yum:
+      name: mesos, marathon, mesosphere-zookeeper
+      state: present
+  - name: set zookeeper id
+    copy: content="{{ zookeeper_id }}" dest=/etc/zookeeper/conf/myid
+  - name: create directory
+    file: path=/opt/mesosphere/zookeeper/conf state=directory
+  - name: copy zookeeper config
+    copy: src=conf/zoo.cfg dest=/opt/mesosphere/zookeeper/conf
+    notify:
+    - start zookeeper
+  - name: set zookeeper connection string
+    copy: content="{{ zookeeper_connection_string }}" dest=/etc/mesos/zk
+  - name: set zookeeper quorum
+    copy: content="{{ zookeeper_quorum }}" dest=/etc/mesos-master/quorum
+  - name: set mesos master hostname
+    copy: content="{{ ansible_host }}" dest=/etc/mesos-master/hostname
+    notify:
+    - stop mesos slave
+    - disable mesos slave
+    - restart mesos master
+    - restart marathon
+
+  handlers:
+    - name: start zookeeper
+      service: name=zookeeper state=started
+    - name: stop mesos slave
+      service: name=mesos-slave.service state=stopped
+    - name: disable mesos slave
+      service: name=mesos-slave.service enabled=no
+    - name: restart mesos master
+      service: name=mesos-master state=restarted
+    - name: restart marathon
+      service: name=marathon state=restarted
+
+- hosts: workers
+  become: yes # needed for vagrant
+  tasks:
+  - name: build hosts file
+    # ansible_default_ipv4 is set to vagrant's NAT interface, so we use ansible_eth1.ipv4
+    lineinfile: dest=/etc/hosts regexp='.*{{ item }}$' line="{{ hostvars[item].ansible_eth1.ipv4.address }} {{item}}" state=present
+    when: hostvars[item].ansible_default_ipv4.address is defined
+    with_items: "{{ groups['all'] }}"
+  - name: install mesosphere
+    yum:
+      name: http://repos.mesosphere.com/el/7/noarch/RPMS/mesosphere-el-repo-7-1.noarch.rpm
+      state: present
+  - name: install packages
+    yum:
+      name: mesos
+      state: present
+  - name: set zookeeper connection string
+    copy: content="{{ zookeeper_connection_string }}" dest=/etc/mesos/zk
+  - name: set mesos master hostname
+    copy: content="{{ ansible_host }}" dest=/etc/mesos-slave/hostname
+    notify:
+    - stop mesos master
+    - disable mesos master
+    - restart mesos slave
+
+  handlers:
+    - name: stop mesos master
+      service: name=mesos-master.service state=stopped
+    - name: disable mesos master
+      service: name=mesos-master.service enabled=no
+    - name: restart mesos slave
+      service: name=mesos-slave state=restarted

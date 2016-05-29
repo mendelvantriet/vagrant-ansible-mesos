@@ -1,0 +1,5 @@
+.vagrant/
+*.retry
+
+conf/zoo.cfg
+production

@@ -1,0 +1,16 @@
+[masters]
+node-01 ansible_host=192.168.9.11 zookeeper_id=1
+
+[workers]
+node-02 ansible_host=192.168.9.12
+
+[all:children]
+masters
+workers
+
+[all:vars]
+zookeeper_connection_string=zk://192.168.9.11:2181/mesos
+
+[masters:vars]
+zookeeper_quorum=1
+
